@@ -205,7 +205,7 @@ export default function Page() {
     const { data, error } = await supabase
       .from("leads")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("id", { ascending: false });
 
     console.log("dados:", data);
     console.log("erro:", error);
