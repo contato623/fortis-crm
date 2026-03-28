@@ -63,8 +63,8 @@ function limparTelefoneParaWhatsapp(telefone: string) {
 }
 
 function montarMensagemInteligente(lead: Lead) {
-  const primeiroNome = lead.nome?.split(" ")[0] || lead.nome;
-  const produto = lead.tipo;
+  const primeiroNome = lead.nome?.split(" ")[0] || lead.nome || "Cliente";
+  const produto = lead.tipo || "seu atendimento";
   const acao = lead.proxima_acao?.trim();
 
   if (lead.status === "Novo") {
@@ -72,11 +72,11 @@ function montarMensagemInteligente(lead: Lead) {
   }
 
   if (lead.status === "Contato feito") {
-    return `Olá, ${primeiroNome}! Passando para dar continuidade no seu atendimento sobre ${produto}. ${acao ? `Minha próxima etapa é: ${acao}.` : ""} Podemos seguir?`;
+    return `Olá, ${primeiroNome}! Passando para dar continuidade no seu atendimento sobre ${produto}. ${acao ? `Próxima etapa: ${acao}.` : ""} Podemos seguir?`;
   }
 
   if (lead.status === "Qualificado") {
-    return `Olá, ${primeiroNome}! Analisei seu perfil para ${produto} e já tenho um direcionamento inicial para você. ${acao ? `Próximo passo: ${acao}.` : ""} Posso te explicar por aqui?`;
+    return `Olá, ${primeiroNome}! Analisei seu perfil para ${produto} e já tenho um direcionamento inicial. ${acao ? `Próximo passo: ${acao}.` : ""} Posso te explicar por aqui?`;
   }
 
   if (lead.status === "Cotação") {
@@ -84,7 +84,7 @@ function montarMensagemInteligente(lead: Lead) {
   }
 
   if (lead.status === "Proposta enviada") {
-    return `Olá, ${primeiroNome}! Passando para confirmar se você conseguiu analisar a proposta de ${produto}. Fico à disposição para te explicar qualquer ponto e avançarmos.`;
+    return `Olá, ${primeiroNome}! Passando para confirmar se você conseguiu analisar a proposta de ${produto}. Fico à disposição para explicar qualquer ponto e avançarmos.`;
   }
 
   if (lead.status === "Aguardando aprovação") {
@@ -96,7 +96,7 @@ function montarMensagemInteligente(lead: Lead) {
   }
 
   if (lead.status === "Contrato finalizado") {
-    return `Olá, ${primeiroNome}! Passando para agradecer pela confiança na Fortis. Seu ${produto} foi finalizado com sucesso. Fico à disposição para suporte, renovação e outros planejamentos futuros.`;
+    return `Olá, ${primeiroNome}! Passando para agradecer pela confiança na Fortis. Seu ${produto} foi finalizado com sucesso. Fico à disposição para suporte e novos planejamentos futuros.`;
   }
 
   if (lead.status === "Perdido") {
@@ -207,6 +207,9 @@ export default function Page() {
       .select("*")
       .order("id", { ascending: false });
 
+    console.log("dados:", data);
+    console.log("erro:", error);
+
     if (error) {
       console.error("Erro ao carregar leads:", error);
       alert("Erro ao carregar leads do banco.");
@@ -218,18 +221,10 @@ export default function Page() {
     setCarregando(false);
   }
 
- useEffect(() => {
-  async function testar() {
-    const { data, error } = await supabase
-      .from("leads")
-      .select("*");
+  useEffect(() => {
+    carregarLeads();
+  }, []);
 
-    console.log("dados:", data);
-    console.log("erro:", error);
-  }
-
-  testar();
-}, []);
   function limparFormulario() {
     setNome("");
     setTelefone("");
@@ -270,7 +265,7 @@ export default function Page() {
 
     if (error) {
       console.error("Erro ao salvar lead:", error);
-      alert("Erro ao salvar lead no banco.");
+      alert(`Erro ao salvar lead no banco: ${error.message}`);
       return;
     }
 
@@ -280,14 +275,9 @@ export default function Page() {
   }
 
   async function atualizarLead(id: number, campo: keyof Lead, valorNovo: string) {
-    const colunaBanco =
-      campo === "proxima_acao" || campo === "data_proxima_acao"
-        ? campo
-        : campo;
-
     const { error } = await supabase
       .from("leads")
-      .update({ [colunaBanco]: valorNovo })
+      .update({ [campo]: valorNovo })
       .eq("id", id);
 
     if (error) {
@@ -417,28 +407,13 @@ export default function Page() {
   }, [leads]);
 
   return (
-    <main
-      style={{
-        padding: 20,
-        fontFamily: "Arial, sans-serif",
-        background: "#f5f7fb",
-        minHeight: "100vh",
-      }}
-    >
+    <main style={paginaStyle}>
       <h1 style={{ marginBottom: 6 }}>CRM Fortis - Banco de Dados Online</h1>
       <p style={{ marginTop: 0, color: "#555" }}>
         Agora os leads estão sendo salvos no Supabase.
       </p>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 12,
-          marginTop: 20,
-          marginBottom: 20,
-        }}
-      >
+      <div style={resumoGridStyle}>
         <div style={cardResumoStyle}>
           <strong>Total de leads</strong>
           <div style={numeroResumoStyle}>{resumo.total}</div>
@@ -494,13 +469,7 @@ export default function Page() {
         {followupsPrioritarios.length === 0 ? (
           <div>Nenhum follow-up prioritário no momento.</div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 12,
-            }}
-          >
+          <div style={cardsGridStyle}>
             {followupsPrioritarios.map((lead) => {
               const follow = classificarFollowUp(lead.data_proxima_acao);
 
@@ -513,14 +482,9 @@ export default function Page() {
                     border: `2px solid ${follow.borda}`,
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div style={topoCardStyle}>
                     <strong>{lead.nome}</strong>
-                    <span
-                      style={{
-                        ...badgeStyle,
-                        background: follow.cor,
-                      }}
-                    >
+                    <span style={{ ...badgeStyle, background: follow.cor }}>
                       {follow.label}
                     </span>
                   </div>
@@ -657,13 +621,7 @@ export default function Page() {
       <section style={blocoStyle}>
         <h2 style={tituloSecaoStyle}>Filtros</h2>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 12,
-          }}
-        >
+        <div style={gridFormularioStyle}>
           <input
             style={inputStyle}
             placeholder="Buscar por nome, telefone, cidade, origem..."
@@ -704,13 +662,7 @@ export default function Page() {
           <div style={blocoStyle}>Nenhum lead encontrado.</div>
         )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-            gap: 14,
-          }}
-        >
+        <div style={cardsGridStyle}>
           {leadsFiltrados.map((lead) => {
             const follow = classificarFollowUp(lead.data_proxima_acao);
             const estaEditando = editandoId === lead.id && leadEditado;
@@ -831,7 +783,7 @@ export default function Page() {
                   </>
                 ) : (
                   <>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                    <div style={topoCardStyle}>
                       <div>
                         <h3 style={{ margin: 0 }}>{lead.nome}</h3>
                         <div style={{ color: "#555", fontSize: 14 }}>{lead.telefone}</div>
@@ -872,12 +824,7 @@ export default function Page() {
                     <hr style={{ margin: "12px 0" }} />
 
                     <div style={{ marginBottom: 10 }}>
-                      <span
-                        style={{
-                          ...badgeStyle,
-                          background: follow.cor,
-                        }}
-                      >
+                      <span style={{ ...badgeStyle, background: follow.cor }}>
                         Follow-up: {follow.label}
                       </span>
                     </div>
@@ -900,18 +847,7 @@ export default function Page() {
 
                     <div style={{ marginTop: 10 }}>
                       <strong>Mensagem do WhatsApp:</strong>
-                      <div
-                        style={{
-                          marginTop: 4,
-                          background: "#f8fafc",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: 8,
-                          padding: 8,
-                          minHeight: 60,
-                          fontSize: 14,
-                          lineHeight: 1.5,
-                        }}
-                      >
+                      <div style={caixaTextoStyle}>
                         {montarMensagemInteligente(lead)}
                       </div>
                     </div>
@@ -967,12 +903,21 @@ export default function Page() {
   );
 }
 
+const paginaStyle: CSSProperties = {
+  padding: 20,
+  fontFamily: "Arial, sans-serif",
+  background: "#f5f7fb",
+  minHeight: "100vh",
+  color: "#111827",
+};
+
 const blocoStyle: CSSProperties = {
   background: "#ffffff",
   border: "1px solid #e5e7eb",
   borderRadius: 12,
   padding: 16,
   marginBottom: 16,
+  opacity: 1,
 };
 
 const cardResumoStyle: CSSProperties = {
@@ -980,6 +925,7 @@ const cardResumoStyle: CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 12,
   padding: 16,
+  opacity: 1,
 };
 
 const numeroResumoStyle: CSSProperties = {
@@ -991,6 +937,20 @@ const numeroResumoStyle: CSSProperties = {
 const tituloSecaoStyle: CSSProperties = {
   marginTop: 0,
   marginBottom: 12,
+};
+
+const resumoGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+  marginTop: 20,
+  marginBottom: 20,
+};
+
+const cardsGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+  gap: 14,
 };
 
 const gridFormularioStyle: CSSProperties = {
@@ -1005,6 +965,9 @@ const inputStyle: CSSProperties = {
   borderRadius: 8,
   border: "1px solid #d1d5db",
   boxSizing: "border-box",
+  background: "#ffffff",
+  color: "#111827",
+  opacity: 1,
 };
 
 const botaoPrincipalStyle: CSSProperties = {
@@ -1047,15 +1010,35 @@ const botaoWhatsappLinkStyle: CSSProperties = {
 const cardLeadStyle: CSSProperties = {
   borderRadius: 12,
   padding: 16,
+  opacity: 1,
 };
 
 const cardAtencaoStyle: CSSProperties = {
   borderRadius: 12,
   padding: 14,
+  opacity: 1,
 };
 
 const linhaInfoStyle: CSSProperties = {
   marginBottom: 6,
+};
+
+const topoCardStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+};
+
+const caixaTextoStyle: CSSProperties = {
+  marginTop: 4,
+  background: "#f8fafc",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  padding: 8,
+  minHeight: 60,
+  fontSize: 14,
+  lineHeight: 1.5,
+  color: "#111827",
 };
 
 const badgeStyle: CSSProperties = {
