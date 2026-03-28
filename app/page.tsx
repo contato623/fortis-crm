@@ -218,10 +218,18 @@ export default function Page() {
     setCarregando(false);
   }
 
-  useEffect(() => {
-    carregarLeads();
-  }, []);
+ useEffect(() => {
+  async function testar() {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*");
 
+    console.log("dados:", data);
+    console.log("erro:", error);
+  }
+
+  testar();
+}, []);
   function limparFormulario() {
     setNome("");
     setTelefone("");
