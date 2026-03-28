@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { supabase } from "@/lib/supabase";
 
 type StatusLead =
   | "Novo"
@@ -24,21 +25,17 @@ type TipoProduto =
 
 type Lead = {
   id: number;
+  created_at?: string;
   nome: string;
   telefone: string;
   cidade: string;
   origem: string;
-  tipo: TipoProduto;
-  status: StatusLead;
-  temperatura: TemperaturaLead;
-  valorEstimado: string;
-  proximaAcao: string;
-  dataProximaAcao: string;
-  dataFechamento: string;
-  dataRenovacao: string;
-  observacoes: string;
-  detalhesProduto: string;
-  dataCriacao: string;
+  tipo: string;
+  status: string;
+  temperatura: string;
+  valor: string;
+  proxima_acao: string;
+  data_proxima_acao: string;
 };
 
 const etapas: StatusLead[] = [
@@ -61,66 +58,14 @@ const tiposProduto: TipoProduto[] = [
   "Outros",
 ];
 
-const leadsIniciais: Lead[] = [
-  {
-    id: 1,
-    nome: "João Silva",
-    telefone: "(92) 99999-1111",
-    cidade: "Manaus",
-    origem: "WhatsApp",
-    tipo: "Seguro de Vida",
-    status: "Novo",
-    temperatura: "Quente",
-    valorEstimado: "150",
-    proximaAcao: "Ligar para entender necessidade",
-    dataProximaAcao: "",
-    dataFechamento: "",
-    dataRenovacao: "",
-    observacoes: "Cliente pediu retorno ainda hoje.",
-    detalhesProduto: "Idade: 35, Profissão: Autônomo, Fumante: Não",
-    dataCriacao: new Date().toLocaleDateString("pt-BR"),
-  },
-  {
-    id: 2,
-    nome: "Maria Souza",
-    telefone: "(92) 98888-2222",
-    cidade: "Manaus",
-    origem: "Instagram",
-    tipo: "Plano de Saúde",
-    status: "Cotação",
-    temperatura: "Morno",
-    valorEstimado: "480",
-    proximaAcao: "Enviar opções de operadora",
-    dataProximaAcao: "",
-    dataFechamento: "",
-    dataRenovacao: "",
-    observacoes: "Está comparando com concorrente.",
-    detalhesProduto: "Vidas: 3, CNPJ: Não informado, Já tem plano: Sim",
-    dataCriacao: new Date().toLocaleDateString("pt-BR"),
-  },
-];
-
-function corTemperatura(temperatura: TemperaturaLead) {
-  if (temperatura === "Quente") return "#dc2626";
-  if (temperatura === "Morno") return "#d97706";
-  return "#2563eb";
-}
-
-function corStatus(status: StatusLead) {
-  if (status === "Contrato finalizado") return "#15803d";
-  if (status === "Perdido") return "#6b7280";
-  if (status === "Aprovado") return "#0f766e";
-  return "#111827";
-}
-
 function limparTelefoneParaWhatsapp(telefone: string) {
   return telefone.replace(/\D/g, "");
 }
 
 function montarMensagemInteligente(lead: Lead) {
-  const primeiroNome = lead.nome.split(" ")[0] || lead.nome;
+  const primeiroNome = lead.nome?.split(" ")[0] || lead.nome;
   const produto = lead.tipo;
-  const acao = lead.proximaAcao?.trim();
+  const acao = lead.proxima_acao?.trim();
 
   if (lead.status === "Novo") {
     return `Olá, ${primeiroNome}! Tudo bem? Aqui é da Fortis. Recebi seu interesse em ${produto} e gostaria de entender melhor sua necessidade para te atender da melhor forma. Podemos falar por aqui?`;
@@ -233,6 +178,9 @@ function classificarFollowUp(dataProximaAcao: string) {
 
 export default function Page() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("Todos");
   const [filtroTemperatura, setFiltroTemperatura] = useState("Todas");
@@ -247,67 +195,32 @@ export default function Page() {
   const [tipo, setTipo] = useState<TipoProduto>("Seguro de Vida");
   const [status, setStatus] = useState<StatusLead>("Novo");
   const [temperatura, setTemperatura] = useState<TemperaturaLead>("Morno");
-  const [valorEstimado, setValorEstimado] = useState("");
+  const [valor, setValor] = useState("");
   const [proximaAcao, setProximaAcao] = useState("");
   const [dataProximaAcao, setDataProximaAcao] = useState("");
-  const [dataFechamento, setDataFechamento] = useState("");
-  const [dataRenovacao, setDataRenovacao] = useState("");
-  const [observacoes, setObservacoes] = useState("");
 
-  const [idade, setIdade] = useState("");
-  const [profissao, setProfissao] = useState("");
-  const [fumante, setFumante] = useState("Não");
+  async function carregarLeads() {
+    setCarregando(true);
 
-  const [vidas, setVidas] = useState("");
-  const [cnpj, setCnpj] = useState("");
-  const [jaTemPlano, setJaTemPlano] = useState("Não");
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*")
+      .order("id", { ascending: false });
 
-  const [tipoConsorcio, setTipoConsorcio] = useState("Imóvel");
-  const [valorConsorcio, setValorConsorcio] = useState("");
-  const [entrada, setEntrada] = useState("");
-
-  const [objetivo, setObjetivo] = useState("");
-  const [valorMensal, setValorMensal] = useState("");
-
-  const [parceiro, setParceiro] = useState("");
-  const [tipoOutroSeguro, setTipoOutroSeguro] = useState("");
-
-  useEffect(() => {
-    const dados = localStorage.getItem("fortis-leads-profissional");
-    if (dados) {
-      setLeads(JSON.parse(dados));
-    } else {
-      setLeads(leadsIniciais);
-      localStorage.setItem(
-        "fortis-leads-profissional",
-        JSON.stringify(leadsIniciais)
-      );
+    if (error) {
+      console.error("Erro ao carregar leads:", error);
+      alert("Erro ao carregar leads do banco.");
+      setCarregando(false);
+      return;
     }
-  }, []);
+
+    setLeads((data as Lead[]) || []);
+    setCarregando(false);
+  }
 
   useEffect(() => {
-    localStorage.setItem("fortis-leads-profissional", JSON.stringify(leads));
-  }, [leads]);
-
-  function limparCamposProduto() {
-    setIdade("");
-    setProfissao("");
-    setFumante("Não");
-
-    setVidas("");
-    setCnpj("");
-    setJaTemPlano("Não");
-
-    setTipoConsorcio("Imóvel");
-    setValorConsorcio("");
-    setEntrada("");
-
-    setObjetivo("");
-    setValorMensal("");
-
-    setParceiro("");
-    setTipoOutroSeguro("");
-  }
+    carregarLeads();
+  }, []);
 
   function limparFormulario() {
     setNome("");
@@ -317,84 +230,80 @@ export default function Page() {
     setTipo("Seguro de Vida");
     setStatus("Novo");
     setTemperatura("Morno");
-    setValorEstimado("");
+    setValor("");
     setProximaAcao("");
     setDataProximaAcao("");
-    setDataFechamento("");
-    setDataRenovacao("");
-    setObservacoes("");
-    limparCamposProduto();
   }
 
-  function montarDetalhesProduto() {
-    if (tipo === "Seguro de Vida") {
-      return `Idade: ${idade || "-"}, Profissão: ${profissao || "-"}, Fumante: ${fumante}`;
+  async function adicionarLead() {
+    if (!nome.trim()) {
+      alert("Preencha o nome do lead.");
+      return;
     }
 
-    if (tipo === "Plano de Saúde") {
-      return `Vidas: ${vidas || "-"}, CNPJ: ${cnpj || "-"}, Já tem plano: ${jaTemPlano}`;
+    setSalvando(true);
+
+    const { error } = await supabase.from("leads").insert([
+      {
+        nome,
+        telefone,
+        cidade,
+        origem,
+        tipo,
+        status,
+        temperatura,
+        valor,
+        proxima_acao: proximaAcao,
+        data_proxima_acao: dataProximaAcao,
+      },
+    ]);
+
+    setSalvando(false);
+
+    if (error) {
+      console.error("Erro ao salvar lead:", error);
+      alert("Erro ao salvar lead no banco.");
+      return;
     }
 
-    if (tipo === "Consórcio") {
-      return `Tipo: ${tipoConsorcio}, Valor desejado: ${valorConsorcio || "-"}, Entrada: ${entrada || "-"}`;
-    }
-
-    if (tipo === "Previdência Privada") {
-      return `Objetivo: ${objetivo || "-"}, Valor mensal: ${valorMensal || "-"}`;
-    }
-
-    return `Tipo procurado: ${tipoOutroSeguro || "-"}, Parceiro responsável: ${parceiro || "-"}`;
-  }
-
-  function adicionarLead() {
-    if (!nome.trim()) return;
-
-    const novoLead: Lead = {
-      id: Date.now(),
-      nome,
-      telefone,
-      cidade,
-      origem,
-      tipo,
-      status,
-      temperatura,
-      valorEstimado,
-      proximaAcao,
-      dataProximaAcao,
-      dataFechamento,
-      dataRenovacao,
-      observacoes,
-      detalhesProduto: montarDetalhesProduto(),
-      dataCriacao: new Date().toLocaleDateString("pt-BR"),
-    };
-
-    setLeads([novoLead, ...leads]);
     limparFormulario();
+    await carregarLeads();
+    alert("Lead salvo no banco com sucesso.");
   }
 
-  function atualizarLead(id: number, campo: keyof Lead, valor: string) {
-    const atualizados = leads.map((lead) =>
-      lead.id === id ? { ...lead, [campo]: valor } : lead
-    );
-    setLeads(atualizados);
+  async function atualizarLead(id: number, campo: keyof Lead, valorNovo: string) {
+    const colunaBanco =
+      campo === "proxima_acao" || campo === "data_proxima_acao"
+        ? campo
+        : campo;
+
+    const { error } = await supabase
+      .from("leads")
+      .update({ [colunaBanco]: valorNovo })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Erro ao atualizar lead:", error);
+      alert("Erro ao atualizar lead.");
+      return;
+    }
+
+    await carregarLeads();
   }
 
-  function excluirLead(id: number) {
+  async function excluirLead(id: number) {
     const confirmar = window.confirm("Deseja excluir este lead?");
     if (!confirmar) return;
-    setLeads(leads.filter((lead) => lead.id !== id));
-  }
 
-  function resetarSistema() {
-    const confirmar = window.confirm(
-      "Deseja resetar todo o CRM? Isso apaga todos os leads salvos neste navegador."
-    );
-    if (!confirmar) return;
-    setLeads(leadsIniciais);
-    localStorage.setItem(
-      "fortis-leads-profissional",
-      JSON.stringify(leadsIniciais)
-    );
+    const { error } = await supabase.from("leads").delete().eq("id", id);
+
+    if (error) {
+      console.error("Erro ao excluir lead:", error);
+      alert("Erro ao excluir lead.");
+      return;
+    }
+
+    await carregarLeads();
   }
 
   function iniciarEdicao(lead: Lead) {
@@ -407,32 +316,53 @@ export default function Page() {
     setLeadEditado(null);
   }
 
-  function salvarEdicao() {
+  function atualizarLeadEditado(campo: keyof Lead, valorNovo: string) {
+    if (!leadEditado) return;
+    setLeadEditado({ ...leadEditado, [campo]: valorNovo });
+  }
+
+  async function salvarEdicao() {
     if (!leadEditado) return;
 
-    setLeads((prev) =>
-      prev.map((lead) => (lead.id === leadEditado.id ? leadEditado : lead))
-    );
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        nome: leadEditado.nome,
+        telefone: leadEditado.telefone,
+        cidade: leadEditado.cidade,
+        origem: leadEditado.origem,
+        tipo: leadEditado.tipo,
+        status: leadEditado.status,
+        temperatura: leadEditado.temperatura,
+        valor: leadEditado.valor,
+        proxima_acao: leadEditado.proxima_acao,
+        data_proxima_acao: leadEditado.data_proxima_acao,
+      })
+      .eq("id", leadEditado.id);
+
+    if (error) {
+      console.error("Erro ao salvar edição:", error);
+      alert("Erro ao salvar edição.");
+      return;
+    }
 
     setEditandoId(null);
     setLeadEditado(null);
-  }
-
-  function atualizarLeadEditado(campo: keyof Lead, valor: string) {
-    if (!leadEditado) return;
-    setLeadEditado({ ...leadEditado, [campo]: valor });
+    await carregarLeads();
   }
 
   const leadsFiltrados = useMemo(() => {
     return leads.filter((lead) => {
       const texto =
-        `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.origem} ${lead.tipo} ${lead.detalhesProduto}`.toLowerCase();
+        `${lead.nome} ${lead.telefone} ${lead.cidade} ${lead.origem} ${lead.tipo}`.toLowerCase();
+
       const passouBusca = texto.includes(busca.toLowerCase());
       const passouStatus =
         filtroStatus === "Todos" || lead.status === filtroStatus;
       const passouTemperatura =
         filtroTemperatura === "Todas" ||
         lead.temperatura === filtroTemperatura;
+
       return passouBusca && passouStatus && passouTemperatura;
     });
   }, [leads, busca, filtroStatus, filtroTemperatura]);
@@ -444,14 +374,14 @@ export default function Page() {
       (l) => l.status === "Contrato finalizado"
     ).length;
     const valorPipeline = leads.reduce(
-      (acc, lead) => acc + Number(lead.valorEstimado || 0),
+      (acc, lead) => acc + Number(lead.valor || 0),
       0
     );
     const followupsAtrasados = leads.filter(
-      (lead) => classificarFollowUp(lead.dataProximaAcao).label === "Atrasado"
+      (lead) => classificarFollowUp(lead.data_proxima_acao).label === "Atrasado"
     ).length;
     const followupsHoje = leads.filter(
-      (lead) => classificarFollowUp(lead.dataProximaAcao).label === "Hoje"
+      (lead) => classificarFollowUp(lead.data_proxima_acao).label === "Hoje"
     ).length;
 
     return {
@@ -471,8 +401,8 @@ export default function Page() {
           lead.status !== "Contrato finalizado" && lead.status !== "Perdido"
       )
       .sort((a, b) => {
-        const prioridadeA = classificarFollowUp(a.dataProximaAcao).prioridade;
-        const prioridadeB = classificarFollowUp(b.dataProximaAcao).prioridade;
+        const prioridadeA = classificarFollowUp(a.data_proxima_acao).prioridade;
+        const prioridadeB = classificarFollowUp(b.data_proxima_acao).prioridade;
         return prioridadeA - prioridadeB;
       })
       .slice(0, 6);
@@ -487,10 +417,9 @@ export default function Page() {
         minHeight: "100vh",
       }}
     >
-      <h1 style={{ marginBottom: 6 }}>CRM Fortis - Versão Profissional</h1>
+      <h1 style={{ marginBottom: 6 }}>CRM Fortis - Banco de Dados Online</h1>
       <p style={{ marginTop: 0, color: "#555" }}>
-        Funil comercial com edição completa, follow-up forte, renovação,
-        WhatsApp inteligente e dados por produto.
+        Agora os leads estão sendo salvos no Supabase.
       </p>
 
       <div
@@ -524,14 +453,26 @@ export default function Page() {
           </div>
         </div>
 
-        <div style={{ ...cardResumoStyle, border: "2px solid #ef4444", background: "#fef2f2" }}>
+        <div
+          style={{
+            ...cardResumoStyle,
+            border: "2px solid #ef4444",
+            background: "#fef2f2",
+          }}
+        >
           <strong>Follow-ups atrasados</strong>
           <div style={{ ...numeroResumoStyle, color: "#b91c1c" }}>
             {resumo.followupsAtrasados}
           </div>
         </div>
 
-        <div style={{ ...cardResumoStyle, border: "2px solid #f59e0b", background: "#fffbeb" }}>
+        <div
+          style={{
+            ...cardResumoStyle,
+            border: "2px solid #f59e0b",
+            background: "#fffbeb",
+          }}
+        >
           <strong>Follow-ups hoje</strong>
           <div style={{ ...numeroResumoStyle, color: "#b45309" }}>
             {resumo.followupsHoje}
@@ -553,7 +494,7 @@ export default function Page() {
             }}
           >
             {followupsPrioritarios.map((lead) => {
-              const follow = classificarFollowUp(lead.dataProximaAcao);
+              const follow = classificarFollowUp(lead.data_proxima_acao);
 
               return (
                 <div
@@ -578,8 +519,8 @@ export default function Page() {
 
                   <div style={{ marginTop: 8, fontSize: 14 }}>
                     <div><strong>Produto:</strong> {lead.tipo}</div>
-                    <div><strong>Ação:</strong> {lead.proximaAcao || "-"}</div>
-                    <div><strong>Data:</strong> {formatarDataVisual(lead.dataProximaAcao)}</div>
+                    <div><strong>Ação:</strong> {lead.proxima_acao || "-"}</div>
+                    <div><strong>Data:</strong> {formatarDataVisual(lead.data_proxima_acao)}</div>
                   </div>
 
                   <div style={{ marginTop: 10 }}>
@@ -641,10 +582,7 @@ export default function Page() {
           <select
             style={inputStyle}
             value={tipo}
-            onChange={(e) => {
-              setTipo(e.target.value as TipoProduto);
-              limparCamposProduto();
-            }}
+            onChange={(e) => setTipo(e.target.value as TipoProduto)}
           >
             {tiposProduto.map((item) => (
               <option key={item}>{item}</option>
@@ -674,8 +612,8 @@ export default function Page() {
           <input
             style={inputStyle}
             placeholder="Valor estimado"
-            value={valorEstimado}
-            onChange={(e) => setValorEstimado(e.target.value)}
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
           />
 
           <input
@@ -691,93 +629,19 @@ export default function Page() {
             value={dataProximaAcao}
             onChange={(e) => setDataProximaAcao(e.target.value)}
           />
-
-          <input
-            style={inputStyle}
-            type="date"
-            value={dataFechamento}
-            onChange={(e) => setDataFechamento(e.target.value)}
-          />
-
-          <input
-            style={inputStyle}
-            type="date"
-            value={dataRenovacao}
-            onChange={(e) => setDataRenovacao(e.target.value)}
-          />
         </div>
-
-        <div style={{ marginTop: 16 }}>
-          <h3 style={{ marginBottom: 10 }}>Dados específicos do produto</h3>
-
-          <div style={gridFormularioStyle}>
-            {tipo === "Seguro de Vida" && (
-              <>
-                <input style={inputStyle} placeholder="Idade" value={idade} onChange={(e) => setIdade(e.target.value)} />
-                <input style={inputStyle} placeholder="Profissão" value={profissao} onChange={(e) => setProfissao(e.target.value)} />
-                <select style={inputStyle} value={fumante} onChange={(e) => setFumante(e.target.value)}>
-                  <option>Não</option>
-                  <option>Sim</option>
-                </select>
-              </>
-            )}
-
-            {tipo === "Plano de Saúde" && (
-              <>
-                <input style={inputStyle} placeholder="Quantidade de vidas" value={vidas} onChange={(e) => setVidas(e.target.value)} />
-                <input style={inputStyle} placeholder="CNPJ (se tiver)" value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
-                <select style={inputStyle} value={jaTemPlano} onChange={(e) => setJaTemPlano(e.target.value)}>
-                  <option>Não</option>
-                  <option>Sim</option>
-                </select>
-              </>
-            )}
-
-            {tipo === "Consórcio" && (
-              <>
-                <select style={inputStyle} value={tipoConsorcio} onChange={(e) => setTipoConsorcio(e.target.value)}>
-                  <option>Imóvel</option>
-                  <option>Automóvel</option>
-                  <option>Moto</option>
-                  <option>Serviços</option>
-                </select>
-                <input style={inputStyle} placeholder="Valor desejado" value={valorConsorcio} onChange={(e) => setValorConsorcio(e.target.value)} />
-                <input style={inputStyle} placeholder="Entrada disponível" value={entrada} onChange={(e) => setEntrada(e.target.value)} />
-              </>
-            )}
-
-            {tipo === "Previdência Privada" && (
-              <>
-                <input style={inputStyle} placeholder="Objetivo" value={objetivo} onChange={(e) => setObjetivo(e.target.value)} />
-                <input style={inputStyle} placeholder="Valor mensal pretendido" value={valorMensal} onChange={(e) => setValorMensal(e.target.value)} />
-              </>
-            )}
-
-            {tipo === "Outros" && (
-              <>
-                <input style={inputStyle} placeholder="Tipo de seguro/produto procurado" value={tipoOutroSeguro} onChange={(e) => setTipoOutroSeguro(e.target.value)} />
-                <input style={inputStyle} placeholder="Corretora/parceiro responsável" value={parceiro} onChange={(e) => setParceiro(e.target.value)} />
-              </>
-            )}
-          </div>
-        </div>
-
-        <textarea
-          style={{ ...inputStyle, minHeight: 90, marginTop: 12, width: "100%" }}
-          placeholder="Observações"
-          value={observacoes}
-          onChange={(e) => setObservacoes(e.target.value)}
-        />
 
         <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={adicionarLead} style={botaoPrincipalStyle}>
-            Adicionar lead
+          <button
+            onClick={adicionarLead}
+            style={botaoPrincipalStyle}
+            disabled={salvando}
+          >
+            {salvando ? "Salvando..." : "Adicionar lead"}
           </button>
+
           <button onClick={limparFormulario} style={botaoSecundarioStyle}>
             Limpar formulário
-          </button>
-          <button onClick={resetarSistema} style={botaoPerigoStyle}>
-            Resetar CRM
           </button>
         </div>
       </section>
@@ -826,7 +690,9 @@ export default function Page() {
       <section>
         <h2 style={tituloSecaoStyle}>Leads cadastrados</h2>
 
-        {leadsFiltrados.length === 0 && (
+        {carregando && <div style={blocoStyle}>Carregando leads...</div>}
+
+        {!carregando && leadsFiltrados.length === 0 && (
           <div style={blocoStyle}>Nenhum lead encontrado.</div>
         )}
 
@@ -838,7 +704,7 @@ export default function Page() {
           }}
         >
           {leadsFiltrados.map((lead) => {
-            const follow = classificarFollowUp(lead.dataProximaAcao);
+            const follow = classificarFollowUp(lead.data_proxima_acao);
             const estaEditando = editandoId === lead.id && leadEditado;
 
             return (
@@ -855,11 +721,30 @@ export default function Page() {
                     <h3 style={{ marginTop: 0 }}>Editando lead</h3>
 
                     <div style={gridFormularioStyle}>
-                      <input style={inputStyle} value={leadEditado.nome} onChange={(e) => atualizarLeadEditado("nome", e.target.value)} placeholder="Nome" />
-                      <input style={inputStyle} value={leadEditado.telefone} onChange={(e) => atualizarLeadEditado("telefone", e.target.value)} placeholder="Telefone" />
-                      <input style={inputStyle} value={leadEditado.cidade} onChange={(e) => atualizarLeadEditado("cidade", e.target.value)} placeholder="Cidade" />
+                      <input
+                        style={inputStyle}
+                        value={leadEditado.nome}
+                        onChange={(e) => atualizarLeadEditado("nome", e.target.value)}
+                        placeholder="Nome"
+                      />
+                      <input
+                        style={inputStyle}
+                        value={leadEditado.telefone}
+                        onChange={(e) => atualizarLeadEditado("telefone", e.target.value)}
+                        placeholder="Telefone"
+                      />
+                      <input
+                        style={inputStyle}
+                        value={leadEditado.cidade}
+                        onChange={(e) => atualizarLeadEditado("cidade", e.target.value)}
+                        placeholder="Cidade"
+                      />
 
-                      <select style={inputStyle} value={leadEditado.origem} onChange={(e) => atualizarLeadEditado("origem", e.target.value)}>
+                      <select
+                        style={inputStyle}
+                        value={leadEditado.origem}
+                        onChange={(e) => atualizarLeadEditado("origem", e.target.value)}
+                      >
                         <option>WhatsApp</option>
                         <option>Instagram</option>
                         <option>Indicação</option>
@@ -869,44 +754,63 @@ export default function Page() {
                         <option>Outro</option>
                       </select>
 
-                      <select style={inputStyle} value={leadEditado.tipo} onChange={(e) => atualizarLeadEditado("tipo", e.target.value)}>
+                      <select
+                        style={inputStyle}
+                        value={leadEditado.tipo}
+                        onChange={(e) => atualizarLeadEditado("tipo", e.target.value)}
+                      >
                         {tiposProduto.map((item) => (
                           <option key={item}>{item}</option>
                         ))}
                       </select>
 
-                      <select style={inputStyle} value={leadEditado.status} onChange={(e) => atualizarLeadEditado("status", e.target.value)}>
+                      <select
+                        style={inputStyle}
+                        value={leadEditado.status}
+                        onChange={(e) => atualizarLeadEditado("status", e.target.value)}
+                      >
                         {etapas.map((etapa) => (
                           <option key={etapa}>{etapa}</option>
                         ))}
                       </select>
 
-                      <select style={inputStyle} value={leadEditado.temperatura} onChange={(e) => atualizarLeadEditado("temperatura", e.target.value)}>
+                      <select
+                        style={inputStyle}
+                        value={leadEditado.temperatura}
+                        onChange={(e) =>
+                          atualizarLeadEditado("temperatura", e.target.value)
+                        }
+                      >
                         <option>Quente</option>
                         <option>Morno</option>
                         <option>Frio</option>
                       </select>
 
-                      <input style={inputStyle} value={leadEditado.valorEstimado} onChange={(e) => atualizarLeadEditado("valorEstimado", e.target.value)} placeholder="Valor estimado" />
-                      <input style={inputStyle} value={leadEditado.proximaAcao} onChange={(e) => atualizarLeadEditado("proximaAcao", e.target.value)} placeholder="Próxima ação" />
-                      <input style={inputStyle} type="date" value={leadEditado.dataProximaAcao} onChange={(e) => atualizarLeadEditado("dataProximaAcao", e.target.value)} />
-                      <input style={inputStyle} type="date" value={leadEditado.dataFechamento} onChange={(e) => atualizarLeadEditado("dataFechamento", e.target.value)} />
-                      <input style={inputStyle} type="date" value={leadEditado.dataRenovacao} onChange={(e) => atualizarLeadEditado("dataRenovacao", e.target.value)} />
+                      <input
+                        style={inputStyle}
+                        value={leadEditado.valor}
+                        onChange={(e) => atualizarLeadEditado("valor", e.target.value)}
+                        placeholder="Valor"
+                      />
+
+                      <input
+                        style={inputStyle}
+                        value={leadEditado.proxima_acao}
+                        onChange={(e) =>
+                          atualizarLeadEditado("proxima_acao", e.target.value)
+                        }
+                        placeholder="Próxima ação"
+                      />
+
+                      <input
+                        style={inputStyle}
+                        type="date"
+                        value={leadEditado.data_proxima_acao}
+                        onChange={(e) =>
+                          atualizarLeadEditado("data_proxima_acao", e.target.value)
+                        }
+                      />
                     </div>
-
-                    <textarea
-                      style={{ ...inputStyle, minHeight: 80, marginTop: 10 }}
-                      value={leadEditado.detalhesProduto}
-                      onChange={(e) => atualizarLeadEditado("detalhesProduto", e.target.value)}
-                      placeholder="Detalhes do produto"
-                    />
-
-                    <textarea
-                      style={{ ...inputStyle, minHeight: 80, marginTop: 10 }}
-                      value={leadEditado.observacoes}
-                      onChange={(e) => atualizarLeadEditado("observacoes", e.target.value)}
-                      placeholder="Observações"
-                    />
 
                     <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <button onClick={salvarEdicao} style={botaoPrincipalStyle}>
@@ -930,7 +834,12 @@ export default function Page() {
                         <div
                           style={{
                             fontWeight: "bold",
-                            color: corTemperatura(lead.temperatura),
+                            color:
+                              lead.temperatura === "Quente"
+                                ? "#dc2626"
+                                : lead.temperatura === "Morno"
+                                  ? "#d97706"
+                                  : "#2563eb",
                           }}
                         >
                           {lead.temperatura}
@@ -938,7 +847,12 @@ export default function Page() {
                         <div
                           style={{
                             fontSize: 13,
-                            color: corStatus(lead.status),
+                            color:
+                              lead.status === "Contrato finalizado"
+                                ? "#15803d"
+                                : lead.status === "Perdido"
+                                  ? "#6b7280"
+                                  : "#111827",
                             marginTop: 4,
                           }}
                         >
@@ -964,28 +878,16 @@ export default function Page() {
                       <strong>Produto:</strong> {lead.tipo}
                     </div>
                     <div style={linhaInfoStyle}>
-                      <strong>Detalhes:</strong> {lead.detalhesProduto || "-"}
-                    </div>
-                    <div style={linhaInfoStyle}>
                       <strong>Origem:</strong> {lead.origem}
                     </div>
                     <div style={linhaInfoStyle}>
-                      <strong>Valor estimado:</strong> R$ {lead.valorEstimado || "0"}
+                      <strong>Valor estimado:</strong> R$ {lead.valor || "0"}
                     </div>
                     <div style={linhaInfoStyle}>
-                      <strong>Próxima ação:</strong> {lead.proximaAcao || "-"}
+                      <strong>Próxima ação:</strong> {lead.proxima_acao || "-"}
                     </div>
                     <div style={linhaInfoStyle}>
-                      <strong>Data próxima ação:</strong> {formatarDataVisual(lead.dataProximaAcao)}
-                    </div>
-                    <div style={linhaInfoStyle}>
-                      <strong>Fechamento:</strong> {formatarDataVisual(lead.dataFechamento)}
-                    </div>
-                    <div style={linhaInfoStyle}>
-                      <strong>Renovação:</strong> {formatarDataVisual(lead.dataRenovacao)}
-                    </div>
-                    <div style={linhaInfoStyle}>
-                      <strong>Criado em:</strong> {lead.dataCriacao}
+                      <strong>Data próxima ação:</strong> {formatarDataVisual(lead.data_proxima_acao)}
                     </div>
 
                     <div style={{ marginTop: 10 }}>
@@ -1004,52 +906,6 @@ export default function Page() {
                       >
                         {montarMensagemInteligente(lead)}
                       </div>
-                    </div>
-
-                    <div style={{ marginTop: 10 }}>
-                      <strong>Observações:</strong>
-                      <div
-                        style={{
-                          marginTop: 4,
-                          background: "#f8fafc",
-                          border: "1px solid #e5e7eb",
-                          borderRadius: 8,
-                          padding: 8,
-                          minHeight: 40,
-                        }}
-                      >
-                        {lead.observacoes || "-"}
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 12 }}>
-                      <strong>Atualizar status</strong>
-                      <select
-                        style={{ ...inputStyle, marginTop: 6 }}
-                        value={lead.status}
-                        onChange={(e) =>
-                          atualizarLead(lead.id, "status", e.target.value)
-                        }
-                      >
-                        {etapas.map((etapa) => (
-                          <option key={etapa}>{etapa}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div style={{ marginTop: 10 }}>
-                      <strong>Atualizar temperatura</strong>
-                      <select
-                        style={{ ...inputStyle, marginTop: 6 }}
-                        value={lead.temperatura}
-                        onChange={(e) =>
-                          atualizarLead(lead.id, "temperatura", e.target.value)
-                        }
-                      >
-                        <option>Quente</option>
-                        <option>Morno</option>
-                        <option>Frio</option>
-                      </select>
                     </div>
 
                     <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
